@@ -54,7 +54,7 @@ def go(args):
     ######################################
     # Use run.use_artifact(...).file() to get the train and validation artifact (args.trainval_artifact)
     # and save the returned path in train_local_pat
-    trainval_local_path = # YOUR CODE HERE
+    trainval_local_path = wandb.use_artifact(args.trainval_artifact).file()# YOUR CODE HERE
     ######################################
 
     X = pd.read_csv(trainval_local_path)
@@ -76,7 +76,7 @@ def go(args):
     ######################################
     # Fit the pipeline sk_pipe by calling the .fit method on X_train and y_train
     # YOUR CODE HERE
-    ######################################
+    sk_pipe.fit(X_train, y_train)
 
     # Compute r2 and MAE
     logger.info("Scoring")
@@ -99,6 +99,7 @@ def go(args):
     # HINT: use mlflow.sklearn.save_model
     # YOUR CODE HERE
     ######################################
+    mlflow.sklearn.save_model(sk_pipe,"random_forest_dir")
 
     ######################################
     # Upload the model we just exported to W&B
@@ -108,38 +109,54 @@ def go(args):
     # run.log_artifact to log the artifact to the run
     # YOUR CODE HERE
     ######################################
+    artifact = wandb.Artifact(
+        name=args.output_artifact,
+        type="model_export",
+        description="rf model from sklearn pipeline",
+        metadata=args.rf_config
+    )
 
+    artifact.add_dir("random_forest_dir")
+    run.log_artifact(artifact)
+
+    print('num 1')
     # Plot feature importance
     fig_feat_imp = plot_feature_importance(sk_pipe, processed_features)
-
+    print('num2')
     ######################################
     # Here we save r_squared under the "r2" key
     run.summary['r2'] = r_squared
     # Now log the variable "mae" under the key "mae".
     # YOUR CODE HERE
     ######################################
-
+    run.summary['mae'] = mae
+    print('num3')
     # Upload to W&B the feture importance visualization
     run.log(
         {
           "feature_importance": wandb.Image(fig_feat_imp),
         }
     )
+    print('num4')
 
 
 def plot_feature_importance(pipe, feat_names):
     # We collect the feature importance for all non-nlp features first
+    print('in1')
     feat_imp = pipe["random_forest"].feature_importances_[: len(feat_names)-1]
     # For the NLP feature we sum across all the TF-IDF dimensions into a global
     # NLP importance
+    print('in2')
     nlp_importance = sum(pipe["random_forest"].feature_importances_[len(feat_names) - 1:])
     feat_imp = np.append(feat_imp, nlp_importance)
     fig_feat_imp, sub_feat_imp = plt.subplots(figsize=(10, 10))
+    print('in3')
     # idx = np.argsort(feat_imp)[::-1]
     sub_feat_imp.bar(range(feat_imp.shape[0]), feat_imp, color="r", align="center")
     _ = sub_feat_imp.set_xticks(range(feat_imp.shape[0]))
     _ = sub_feat_imp.set_xticklabels(np.array(feat_names), rotation=90)
     fig_feat_imp.tight_layout()
+    print('in4')
     return fig_feat_imp
 
 
@@ -158,7 +175,9 @@ def get_inference_pipeline(rf_config, max_tfidf_features):
     # Build a pipeline with two steps:
     # 1 - A SimpleImputer(strategy="most_frequent") to impute missing values
     # 2 - A OneHotEncoder() step to encode the variable
-    non_ordinal_categorical_preproc = # YOUR CODE HERE
+    non_ordinal_categorical_preproc = make_pipeline(
+        SimpleImputer(strategy="most_frequent"), OneHotEncoder()
+    )
     ######################################
 
     # Let's impute the numerical columns to make sure we can handle missing values
@@ -217,8 +236,12 @@ def get_inference_pipeline(rf_config, max_tfidf_features):
     # ColumnTransformer instance that we saved in the `preprocessor` variable, and a step called "random_forest"
     # with the random forest instance that we just saved in the `random_forest` variable.
     # HINT: Use the explicit Pipeline constructor so you can assign the names to the steps, do not use make_pipeline
-    sk_pipe = # YOUR CODE HERE
-
+    sk_pipe = Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            ("random_forest", random_Forest)
+        ]
+    )
     return sk_pipe, processed_features
 
 
