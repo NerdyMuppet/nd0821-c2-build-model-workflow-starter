@@ -74,4 +74,4 @@ def test_price_range(data, min_price, max_price):
     """
     Check that the prices do not contain outliers. 
     """
-    assert data["price"].between(min_price, max_price)
+    assert data["price"].between(min_price, max_price).all()
